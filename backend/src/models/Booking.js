@@ -9,13 +9,19 @@ const bookingSchema = new mongoose.Schema({
   startTime: { type: String, required: true }, // e.g., '10:00'
   endTime: { type: String, required: true }, // e.g., '12:00'
   amount: { type: Number, required: true },
+  vehiclePlate: { type: String },
+  ownerName: { type: String },
   paymentId: { type: String },
   qrTokenId: { type: String },
   status: {
     type: String,
-    enum: ['PENDING', 'CONFIRMED', 'ACTIVE', 'COMPLETED', 'CANCELLED'],
+    enum: ['PENDING', 'CONFIRMED', 'ACTIVE', 'COMPLETED', 'CANCELLED', 'REFUND_PENDING', 'REFUNDED', 'EXPIRED'],
     default: 'PENDING'
   },
+  originalAmount: { type: Number },
+  cancellationFee: { type: Number },
+  refundAmount: { type: Number },
+  refundStatus: { type: String, enum: ['PENDING', 'PROCESSED', 'FAILED'] },
   cancellationReason: { type: String }
 }, { timestamps: true });
 

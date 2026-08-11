@@ -25,7 +25,15 @@ exports.createParking = async (req, res) => {
 // @access  Public
 exports.getParkings = async (req, res) => {
   try {
-    const parkings = await Parking.find({ status: 'APPROVED' });
+    let query = { status: 'APPROVED' };
+    
+    if (req.query.ev_only === 'true') {
+      const evSlots = await ParkingSlot.find({ slotType: 'EV' }).select('parkingId');
+      const parkingIdsWithEV = evSlots.map(slot => slot.parkingId);
+      query._id = { $in: parkingIdsWithEV };
+    }
+
+    const parkings = await Parking.find(query);
 
     res.status(200).json({
       success: true,
@@ -71,7 +79,17 @@ exports.createSlot = async (req, res) => {
 // @access  Public
 exports.getSlots = async (req, res) => {
   try {
-    const slots = await ParkingSlot.find({ parkingId: req.params.parkingId });
+    let parkingId = req.params.parkingId;
+    
+    // If frontend sends the placeholder, fallback to the first parking in the DB
+    if (parkingId === 'DEFAULT_PARKING_ID') {
+      const defaultParking = await Parking.findOne();
+      if (defaultParking) {
+        parkingId = defaultParking._id;
+      }
+    }
+
+    const slots = await ParkingSlot.find({ parkingId });
 
     res.status(200).json({
       success: true,

@@ -14,7 +14,7 @@ app.use(cors({
   credentials: true
 }));
 
-// Rate Limiting
+// Rate Limiting (Global)
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 100, // Limit each IP to 100 requests per `window` (here, per 15 minutes)
@@ -22,6 +22,14 @@ const limiter = rateLimit({
   legacyHeaders: false,
 });
 app.use('/api', limiter);
+
+// Auth Rate Limiting (Stricter)
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 5,
+  message: { success: false, message: 'Too many auth attempts from this IP, please try again after 15 minutes' }
+});
+app.use('/api/v1/auth', authLimiter);
 
 // Body Parser
 app.use(express.json());
@@ -37,6 +45,12 @@ app.use('/api/v1/auth', require('./routes/auth.routes'));
 app.use('/api/v1/parking', require('./routes/parking.routes'));
 // app.use('/api/v1/slots', require('./routes/slot.routes'));
 app.use('/api/v1/bookings', require('./routes/booking.routes'));
+app.use('/api/v1/qr', require('./routes/qr.routes'));
+app.use('/api/v1/ai', require('./routes/ai.routes'));
+app.use('/api/v1/pricing', require('./routes/pricing.routes'));
+app.use('/api/v1/slots', require('./routes/slot.routes'));
+app.use('/api/v1/waitlist', require('./routes/waitlist.routes'));
+app.use('/api/v1/payments', require('./routes/payment.routes'));
 
 // Global Error Handler
 app.use((err, req, res, next) => {
