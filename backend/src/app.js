@@ -5,6 +5,9 @@ const rateLimit = require('express-rate-limit');
 
 const app = express();
 
+// Trust proxy is required for Render (and other reverse proxies) to work with express-rate-limit
+app.set('trust proxy', 1);
+
 // Security Middleware
 app.use(helmet());
 
