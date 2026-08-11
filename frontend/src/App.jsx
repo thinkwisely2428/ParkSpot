@@ -933,7 +933,7 @@ function LoginScreen({ onLogin }) {
       const u = await firebaseLogin(email, pass);
       onLogin(u);
     } catch (e) {
-      setErr(e.message?.includes("auth") ? "Invalid credentials" : "Connection error");
+      setErr(e.message || "Connection error");
       setLoading(false);
     }
   }
