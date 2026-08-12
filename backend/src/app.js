@@ -49,10 +49,10 @@ app.use('/api/v1/parking', require('./routes/parking.routes'));
 // app.use('/api/v1/slots', require('./routes/slot.routes'));
 app.use('/api/v1/bookings', require('./routes/booking.routes'));
 app.use('/api/v1/qr', require('./routes/qr.routes'));
-app.use('/api/v1/ai', require('./routes/ai.routes'));
 app.use('/api/v1/pricing', require('./routes/pricing.routes'));
 app.use('/api/v1/slots', require('./routes/slot.routes'));
 app.use('/api/v1/waitlist', require('./routes/waitlist.routes'));
+app.use('/api/v1/p2p', require('./routes/p2p.routes'));
 app.use('/api/v1/payments', require('./routes/payment.routes'));
 
 // Global Error Handler

@@ -1,7 +1,8 @@
 import { io } from 'socket.io-client';
 
-const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000';
-const socket = io(BACKEND_URL);
+const envUrl = import.meta.env.VITE_BACKEND_URL;
+const BACKEND_URL = envUrl !== undefined ? envUrl : 'http://localhost:5000';
+const socket = io(BACKEND_URL || undefined);
 
 let currentUser = null;
 let authListeners = [];
@@ -336,3 +337,30 @@ export async function verifyRazorpaySignature(paymentData) {
   });
   return res.success;
 }
+
+// ─── P2P MARKETPLACE ─────────────────────────────────────────────────────────
+export async function getP2PListings() {
+  try {
+    const res = await fetchAPI('/p2p');
+    return res.data || [];
+  } catch (e) {
+    return [];
+  }
+}
+
+export async function createP2PListing(listingData) {
+  const res = await fetchAPI('/p2p', {
+    method: 'POST',
+    body: JSON.stringify(listingData)
+  });
+  return res.data;
+}
+
+export async function submitP2PReview(listingId, reviewData) {
+  const res = await fetchAPI(`/p2p/${listingId}/review`, {
+    method: 'POST',
+    body: JSON.stringify(reviewData)
+  });
+  return res.data;
+}
+
