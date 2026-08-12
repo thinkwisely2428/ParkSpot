@@ -134,10 +134,14 @@ function genFloor(fid, rate) {
       const occ = Math.random() < 0.45;
       const rsvd = !occ && Math.random() < 0.18;
       const sinceMs = occ ? Date.now() - rnd(5, 240) * 60000 : null;
-      const slotType = SLOT_TYPES[(r + c) % SLOT_TYPES.length];
+      let slotType = "standard";
+      if (r === 0) slotType = "premium";
+      else if (r === 1) slotType = "ev";
+      else if (r === 2) slotType = "accessible";
+      
       slots.push({
         id: `${fid}-${r}-${c}`, fid, row: r, col: c,
-        type: slotType === "disabled" ? "accessible" : slotType,
+        type: slotType,
         occupied: occ, reserved: rsvd,
         plate: occ ? plate() : null,
         since: sinceMs,
@@ -553,7 +557,7 @@ export default function App() {
   ];
 
   return (
-    <div style={{ display: "flex", height: "100vh", background: T.bg0, color: T.text0, fontFamily: T.font, overflow: "hidden" }}>
+    <div className="app-container" style={{ display: "flex", height: "100vh", background: T.bg0, color: T.text0, fontFamily: T.font, overflow: "hidden" }}>
       {/* Sidebar */}
       <aside className="sidebar-container" style={{
         width: sideOpen ? 220 : 60, transition: "width 0.3s cubic-bezier(.4,0,.2,1)",
@@ -613,7 +617,7 @@ export default function App() {
       {/* Main */}
       <div className="main-content-container" style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
         {/* Topbar */}
-        <header style={{
+        <header className="topbar-container" style={{
           height: 52, display: "flex", alignItems: "center", justifyContent: "space-between",
           padding: "0 24px", borderBottom: `1px solid ${T.border}`, background: T.bg1, flexShrink: 0,
         }}>
@@ -623,14 +627,14 @@ export default function App() {
             </span>
             <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
               <div style={{ width: 7, height: 7, borderRadius: "50%", background: T.green, animation: "livePulse 2s infinite" }} />
-              <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: 2, color: T.green }}>LIVE</span>
+              <span className="hide-on-mobile" style={{ fontSize: 10, fontWeight: 700, letterSpacing: 2, color: T.green }}>LIVE</span>
             </div>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
             <div style={{ fontSize: 13, fontWeight: 600, color: T.text2 }}>
-              <span style={{ color: T.green, fontWeight: 800 }}>{globalStats.free}</span> / {globalStats.total} free
+              <span style={{ color: T.green, fontWeight: 800 }}>{globalStats.free}</span> / {globalStats.total} <span className="hide-on-mobile">free</span>
             </div>
-            <div style={{ fontSize: 13, fontWeight: 700, color: T.amber }}>
+            <div className="hide-on-mobile" style={{ fontSize: 13, fontWeight: 700, color: T.amber }}>
               ₹{globalStats.revenue.toLocaleString("en-IN")} today
             </div>
             {/* Scan QR Button */}
@@ -641,7 +645,7 @@ export default function App() {
                 color: T.green, cursor: "pointer", fontSize: 11, fontWeight: 700, fontFamily: T.font,
               }}>
                 <span style={{ fontSize: 14 }}>📷</span>
-                SCAN QR
+                <span className="hide-on-mobile">SCAN</span>
               </button>
             )}
             {/* Ctrl+K palette button */}
@@ -651,7 +655,7 @@ export default function App() {
               color: T.text2, cursor: "pointer", fontSize: 11, fontFamily: T.font,
             }}>
               <span>🔍</span>
-              <span style={{ display: "flex", gap: 3 }}>
+              <span className="hide-on-mobile" style={{ display: "flex", gap: 3 }}>
                 <kbd style={{ background: T.bg3, border: `1px solid ${T.border2}`, borderRadius: 4, padding: "1px 5px", fontSize: 10, color: T.text1 }}>Ctrl</kbd>
                 <kbd style={{ background: T.bg3, border: `1px solid ${T.border2}`, borderRadius: 4, padding: "1px 5px", fontSize: 10, color: T.text1 }}>K</kbd>
               </span>
@@ -698,7 +702,7 @@ export default function App() {
                 </div>
               )}
             </div>
-            <div style={{ fontSize: 12, fontWeight: 500, color: T.text2, fontFamily: T.fontMono }}>{new Date().toLocaleTimeString("en-IN")}</div>
+            <div className="hide-on-mobile" style={{ fontSize: 12, fontWeight: 500, color: T.text2, fontFamily: T.fontMono }}>{new Date().toLocaleTimeString("en-IN")}</div>
           </div>
         </header>
 
@@ -1442,7 +1446,7 @@ function Dashboard({ stats, parking, revenue, bookings }) {
       </div>
 
       {/* KPI row */}
-      <div className="stack-on-mobile" style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 12 }}>
+      <div className="dashboard-stats-grid" style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 12 }}>
         <KpiCard label="Total Slots" value={stats.total} color={T.text1} icon="🅿" sparkData={[30, 32, 31, 32, 32, 32, stats.total]} />
         <KpiCard label="Available" value={stats.free} color={T.green} icon="✓" sparkData={revenueSpark.map((_, i, a) => a.length - i)} />
         <KpiCard label="Occupied" value={stats.occupied} color={T.red} icon="🚗" sparkData={revenueSpark} />
@@ -1451,7 +1455,7 @@ function Dashboard({ stats, parking, revenue, bookings }) {
       </div>
 
       {/* Main grid */}
-      <div className="stack-on-mobile" style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 16 }}>
+      <div className="dashboard-grid" style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 16 }}>
         {/* Revenue SVG Chart */}
         <div style={{ background: T.bg1, border: `1px solid ${T.border}`, borderRadius: 14, padding: "22px 24px" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
@@ -1553,7 +1557,7 @@ function Dashboard({ stats, parking, revenue, bookings }) {
         </div>
         {activeBookings.length === 0
           ? <div style={{ fontSize: 13, color: T.text2, textAlign: "center", padding: "24px 0" }}>No active sessions right now</div>
-          : <table style={{ width: "100%", borderCollapse: "collapse" }}>
+          : <div className="mobile-scroll-container"><table style={{ width: "100%", borderCollapse: "collapse" }}>
             <thead>
               <tr style={{ borderBottom: `1px solid ${T.border}` }}>
                 {["Booking ID", "Plate", "Floor", "Slot", "Entry", "Vehicle", "Elapsed", "Est. Fee"].map(h => (
@@ -1577,7 +1581,7 @@ function Dashboard({ stats, parking, revenue, bookings }) {
                 </tr>
               ))}
             </tbody>
-          </table>
+          </table></div>
         }
       </div>
     </div>
@@ -1594,10 +1598,10 @@ function ParkingMap({ floors, parking, activeFloor, setActiveFloor, filtered, se
 
   function slotBg(s) {
     if (s.occupied) return "#FF4757";
-    if (s.reserved) return "#E6B800";
-    if (s.type === "ev") return "#FFE135";
+    if (s.reserved) return "#A0A8C8";
+    if (s.type === "ev") return "#00E5FF";
     if (s.type === "accessible") return "#B388FF";
-    if (s.type === "premium") return "#E6B800";
+    if (s.type === "premium") return "#FFB300";
     return "#00E676";
   }
 
@@ -1636,12 +1640,23 @@ function ParkingMap({ floors, parking, activeFloor, setActiveFloor, filtered, se
           {["all", "standard", "ev", "accessible", "premium", "car", "bike", "suv", "truck", "ev car"].map(t => {
             const isSel = filterType === t;
             const vehCfg = ["car", "bike", "suv", "truck", "ev car"].includes(t) ? getVehicleConfig(t) : null;
+            
+            let color = T.accent;
+            let lightBg = T.accentDim;
+            if (t === "ev") { color = "#00E5FF"; lightBg = "#00E5FF22"; }
+            else if (t === "accessible") { color = "#B388FF"; lightBg = "#B388FF22"; }
+            else if (t === "premium") { color = "#FFB300"; lightBg = "#FFB30022"; }
+            else if (t === "standard") { color = "#00E676"; lightBg = "#00E67622"; }
+            
+            const activeColor = vehCfg ? vehCfg.color : color;
+            const activeBg = vehCfg ? vehCfg.lightBg : lightBg;
+            
             return (
               <button key={t} onClick={() => setFilterType(t)} style={{
                 padding: "5px 10px",
-                background: isSel ? (vehCfg ? vehCfg.lightBg : T.accentDim) : T.bg2,
-                border: `1px solid ${isSel ? (vehCfg ? vehCfg.color : T.accent) : T.border}`,
-                color: isSel ? (vehCfg ? vehCfg.color : T.accent) : T.text2,
+                background: isSel ? activeBg : T.bg2,
+                border: `1px solid ${isSel ? activeColor : T.border}`,
+                color: isSel ? activeColor : T.text2,
                 borderRadius: 6, cursor: "pointer",
                 fontSize: 9, letterSpacing: 1, fontFamily: T.font, fontWeight: 700,
                 display: "inline-flex", alignItems: "center", gap: 4,
@@ -2314,7 +2329,7 @@ function RazorpayGatewayModal({ data, onClose, onConfirm }) {
   }
 
   return (
-    <div style={{
+    <div className="razorpay-modal-container" style={{
       width: 780, maxWidth: "95vw", height: 480, background: "#FFFFFF",
       borderRadius: 16, overflow: "hidden", display: "grid", gridTemplateColumns: "280px 1fr",
       boxShadow: "0 25px 80px rgba(0,0,0,0.8)", fontFamily: "Inter, sans-serif"
@@ -2461,7 +2476,7 @@ function Modal({ title, onClose, children, wide }) {
       backdropFilter: "blur(8px)", WebkitBackdropFilter: "blur(8px)",
       animation: "fadeIn 0.2s ease",
     }} onClick={e => e.target === e.currentTarget && onClose()}>
-      <div className="modal-window" style={{
+      <div className="modal-window mobile-modal" style={{
         background: T.bg2, border: `1px solid ${T.border2}`, borderRadius: 16,
         padding: "26px 30px", width: wide ? 580 : 420, maxWidth: "95vw",
         animation: "modalPop 0.22s cubic-bezier(0.16, 1, 0.3, 1)",

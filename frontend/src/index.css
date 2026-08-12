@@ -21,3 +21,190 @@ html, body {
   display: flex;
   flex-direction: column;
 }
+
+/* Base custom classes for elements */
+.mobile-scroll-container {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* MOBILE RESPONSIVE OVERRIDES */
+@media (max-width: 768px) {
+  /* Hide non-essential desktop elements */
+  .hide-on-mobile {
+    display: none !important;
+  }
+
+  /* Main Layout */
+  .app-container {
+    flex-direction: column !important;
+  }
+  
+  /* Sidebar -> Bottom Navigation */
+  .sidebar-container {
+    width: 100% !important;
+    height: 60px !important;
+    flex-direction: row !important;
+    position: fixed !important;
+    bottom: 0 !important;
+    left: 0 !important;
+    z-index: 100 !important;
+    border-right: none !important;
+    border-top: 1px solid #333 !important;
+  }
+  
+  .nav-container {
+    flex-direction: row !important;
+    padding: 0 !important;
+    justify-content: space-around !important;
+    align-items: center !important;
+    width: 100% !important;
+  }
+  
+  .nav-btn {
+    padding: 8px !important;
+    border-left: none !important;
+    border-bottom: 3px solid transparent !important;
+    flex-direction: column !important;
+    gap: 2px !important;
+    width: auto !important;
+  }
+  
+  .nav-btn.active {
+    border-bottom-color: #ffe135 !important;
+  }
+
+  .nav-btn span:first-child {
+    font-size: 20px !important;
+  }
+
+  .nav-btn span.hide-on-mobile {
+    display: block !important;
+    font-size: 9px !important;
+    line-height: 1 !important;
+  }
+
+  /* Adjust Main Content to not underlap the bottom nav */
+  .main-content-container {
+    height: calc(100vh - 60px) !important;
+  }
+  
+  /* Topbar Adjustments */
+  .topbar-container {
+    padding: 0 12px !important;
+    height: 48px !important;
+  }
+  
+  /* Dashboard & Grids */
+  .dashboard-grid, .responsive-grid {
+    grid-template-columns: 1fr !important;
+    gap: 12px !important;
+  }
+
+  .dashboard-stats-grid {
+    grid-template-columns: 1fr 1fr !important;
+  }
+
+  /* Modals */
+  .mobile-modal {
+    width: 92% !important;
+    max-width: 400px !important;
+    max-height: 85vh !important;
+    padding: 16px !important;
+  }
+  
+  .mobile-modal-content {
+    max-height: calc(85vh - 60px) !important;
+    overflow-y: auto !important;
+  }
+
+  /* Parking Grid */
+  .parking-grid-wrapper {
+    display: flex !important;
+    flex-direction: column !important;
+  }
+  
+  .parking-grid-scroll {
+    overflow-x: auto !important;
+    padding-bottom: 12px !important;
+    margin-right: -16px !important; /* extend scroll to edge */
+    padding-right: 16px !important;
+  }
+  
+  /* Forms and Inputs */
+  .input-row {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 6px !important;
+  }
+
+  /* Live Map Layout */
+  .map-layout {
+    flex-direction: column !important;
+  }
+
+  .map-floor-selector {
+    width: 100% !important;
+    height: auto !important;
+    display: flex !important;
+    flex-direction: row !important;
+    padding: 8px 12px !important;
+    border-right: none !important;
+    border-bottom: 1px solid #222 !important;
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .map-floor-selector .floor-btn {
+    width: auto !important;
+    padding: 8px 16px !important;
+    border-left: none !important;
+    border-bottom: 2px solid transparent !important;
+    white-space: nowrap;
+    border-radius: 6px;
+  }
+
+  .map-floor-selector .floor-btn.active {
+    border-bottom: 2px solid #ffe135 !important;
+  }
+
+  .map-grid-container {
+    padding: 12px !important;
+  }
+
+  .map-grid {
+    min-width: 600px !important; /* Force horizontal scroll on very small screens instead of squishing */
+  }
+
+  /* Razorpay Gateway Modal */
+  .razorpay-modal-container {
+    display: flex !important;
+    flex-direction: column !important;
+    height: 85vh !important;
+    width: 95vw !important;
+    grid-template-columns: none !important;
+    overflow-y: auto !important;
+  }
+  
+  .razorpay-modal-container > div:nth-child(2) > div:nth-child(2) {
+    display: flex !important;
+    flex-direction: column !important;
+    overflow-y: visible !important;
+  }
+  
+  .razorpay-modal-container > div:nth-child(2) > div:nth-child(2) > div:first-child {
+    display: flex !important;
+    flex-direction: row !important;
+    overflow-x: auto !important;
+    border-right: none !important;
+    border-bottom: 1px solid #EFEFEF !important;
+  }
+  
+  .razorpay-modal-container > div:nth-child(2) > div:nth-child(2) > div:first-child button {
+    white-space: nowrap !important;
+    border-left: none !important;
+    border-bottom: 3px solid transparent !important;
+  }
+}
