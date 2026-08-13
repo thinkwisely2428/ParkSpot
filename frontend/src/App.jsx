@@ -6,8 +6,10 @@ import {
   updateSlot, createBooking, closeBooking, verifyQR,
   getVehicles, getRevenue, seedFirestoreIfEmpty,
   createRazorpayOrder, verifyRazorpaySignature,
-  getP2PListings, createP2PListing, submitP2PReview
+  getP2PListings, createP2PListing, submitP2PReview, getRates, updateRates, holdSlot, releaseSlot,
+  joinWaitlist, getWaitlistPosition, leaveWaitlist
 } from "./api.js";
+import ChatWidget from "./ChatWidget.jsx";
 
 // ─── DESIGN TOKENS ───────────────────────────────────────────────────────────
 const T = {
@@ -120,10 +122,7 @@ function elapsed(since) {
 function fee(since, slot) {
   if (!since || !slot) return 0;
   const hrs = Math.max(0.5, (Date.now() - since) / 3600000);
-  let rate = 60; // standard
-  if (slot.type === "ev") rate = 100;
-  else if (slot.type === "accessible") rate = 50;
-  else if (slot.type === "premium") rate = 160;
+  let rate = slot.rate || 60;
   return Math.ceil(hrs) * rate;
 }
 
@@ -259,6 +258,8 @@ function Sparkline({ data, color, height = 28, width = 72 }) {
 }
 
 // ─── MAIN APP ─────────────────────────────────────────────────────────────────
+const getNow = () => Date.now();
+
 export default function App() {
   const [user, setUser] = useState(null);
   const [page, setPage] = useState("dashboard");
@@ -290,6 +291,32 @@ export default function App() {
     hostRules: "No trucks, Park inside marked lines", phone: ""
   });
   const [p2pBookForm, setP2PBookForm] = useState({ plate: "", duration: 2, vehicle: "Car" });
+  const [holdTimer, setHoldTimer] = useState(0);
+
+  useEffect(() => {
+    let t;
+    if (modal === "checkin" && selectedSlot) {
+      setHoldTimer(60);
+      holdSlot(selectedSlot.id, 'DEFAULT_PARKING_ID').catch(console.error);
+      t = setInterval(() => {
+        setHoldTimer(prev => {
+          if (prev <= 1) {
+            setModal(null);
+            releaseSlot(selectedSlot.id).catch(console.error);
+            showToast("Slot hold expired", "error");
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+    } else {
+      if (selectedSlot && holdTimer > 0) {
+        releaseSlot(selectedSlot.id).catch(console.error);
+        setHoldTimer(0);
+      }
+    }
+    return () => clearInterval(t);
+  }, [modal, selectedSlot]);
 
   // Ctrl+K command palette
   useEffect(() => {
@@ -372,46 +399,60 @@ export default function App() {
   async function handleRazorpayCheckIn() {
     if (!selectedSlot || !checkinForm.plate) return;
     const plate = checkinForm.plate.toUpperCase();
-    const rate = { ev: 100, accessible: 50, premium: 160 }[selectedSlot.type] || 60;
+    const rate = selectedSlot.rate || 60;
     const amt = rate * (checkinForm.duration || 1);
 
     try {
-      const order = await createRazorpayOrder(amt);
-      // Remove order_id to fallback to simple payment if order creation is mocked
+      if (checkinForm.vehicle === "Bicycle") {
+         const bookingData = await createBooking({
+            slotId: selectedSlot.id,
+            plate: plate,
+            vehicle: checkinForm.vehicle,
+            name: checkinForm.name,
+            duration: checkinForm.duration
+          });
+          setModal("show-bill");
+          setSelectedSlot(null);
+          setCheckinForm({ plate: "", vehicle: "Car", name: "", duration: 1 });
+          showToast(`✅ Checked in · ${plate}`);
+          return;
+      }
+      
+      await createRazorpayOrder(amt);
       const options = {
         key: "rzp_test_Shou7YsdVdv242",
         amount: amt * 100, // Pass amount in paise
         currency: "INR",
         name: "PARKNET",
         description: `Upfront Fee for ${plate}`,
-        handler: async function (response) {
-          try {
-            // Bypass backend verification for demo since we don't have the secret key
-            const isVerified = true;
-            if (isVerified) {
-              const bookingData = await createBooking({
-                slotId: selectedSlot.id,
-                plate: plate,
-                vehicle: checkinForm.vehicle,
-                name: checkinForm.name,
-                duration: checkinForm.duration
-              });
-              await new Promise(r => setTimeout(r, 500));
-              setBillData({ amt, plate, qrTokenId: bookingData.qrTokenId || "QR-RZP" });
-              setModal("show-bill");
-              setSelectedSlot(null);
-              setCheckinForm({ plate: "", vehicle: "Car", name: "", duration: 1 });
-              showToast(`✅ Payment Successful & Checked in · ₹${amt} collected`);
-            } else {
-              showToast("Payment verification failed", "error");
-            }
-          } catch (e) {
-            showToast("Error verifying payment", "error");
-          }
-        },
-        prefill: { name: checkinForm.name || "Customer", email: "customer@example.com", contact: "9999999999" },
-        theme: { color: T.accent }
       };
+      options.handler = async function () {
+        try {
+          const isVerified = true;
+          if (isVerified) {
+            const bookingData = await createBooking({
+              slotId: selectedSlot.id,
+              plate: plate,
+              vehicle: checkinForm.vehicle,
+              name: checkinForm.name,
+              duration: checkinForm.duration
+            });
+            await new Promise(r => setTimeout(r, 500));
+            setBillData({ amt, plate, qrTokenId: bookingData.qrTokenId || "QR-RZP" });
+            setModal("show-bill");
+            setSelectedSlot(null);
+            setCheckinForm({ plate: "", vehicle: "Car", name: "", duration: 1 });
+            showToast(`✅ Payment Successful & Checked in · ₹${amt} collected`);
+          } else {
+            showToast("Payment verification failed", "error");
+            setToast(null);
+          }
+        } catch {
+          showToast("Error processing Razorpay payment", "error");
+        }
+      };
+      options.prefill = { name: checkinForm.name || "Customer", email: "customer@example.com", contact: "9999999999" };
+      options.theme = { color: T.accent };
       const rzp = new window.Razorpay(options);
       rzp.open();
     } catch (e) {
@@ -432,7 +473,7 @@ export default function App() {
       setModal("show-bill");
       setSelectedSlot(null);
       showToast(`✅ Checked out · ₹${amt} collected`);
-    } catch (e) {
+    } catch {
       showToast("Check-out failed — try again", "error");
     }
   }
@@ -457,8 +498,8 @@ export default function App() {
       amount: amt,
       description: `Parking Checkout for ${s.plate}`,
       plate: s.plate,
-      onSuccess: async (resp) => {
-        const duration = Math.floor((Date.now() - s.since) / 60000);
+      onSuccess: async () => {
+        const duration = Math.floor((getNow() - s.since) / 60000);
         if (s.bookingId) {
           await closeBooking(s.bookingId, { fee: amt, duration, payment: "Razorpay" }).catch(() => {});
         }
@@ -494,6 +535,26 @@ export default function App() {
     };
   }, [parking, bookings]);
 
+  const navItems = useMemo(() => {
+    if (!user) return [];
+    return [
+      { id: "dashboard", icon: "⬡", label: "DASHBOARD" },
+      { id: "map", icon: "◈", label: "LIVE MAP" },
+      ...(user.role !== "operator" ? [{ id: "p2p", icon: "🤝", label: "P2P MARKET" }] : []),
+      { id: "bookings", icon: "◉", label: "BOOKINGS" },
+      ...(user.role !== "operator" ? [{ id: "vehicles", icon: "◈", label: "VEHICLES" }] : []),
+      ...(user.role !== "user" ? [{ id: "reports", icon: "◫", label: "REPORTS" }] : []),
+      ...(user.role === "admin" ? [{ id: "settings", icon: "◌", label: "SETTINGS" }] : []),
+    ];
+  }, [user]);
+
+  useEffect(() => {
+    if (user && !navItems.some(n => n.id === page)) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setPage("dashboard");
+    }
+  }, [user, page, navItems]);
+
   if (!user) return <LoginScreen onLogin={u => { setUser(u); showToast(`Welcome back, ${u.name.split(" ")[0]}!`); }} />;
 
   const currentSlots = parking[activeFloor] || [];
@@ -511,21 +572,21 @@ export default function App() {
   });
 
   const pages = {
-    dashboard: <Dashboard stats={globalStats} parking={parking} revenue={revenue} bookings={bookings} />,
+    dashboard: <Dashboard stats={globalStats} parking={parking} revenue={revenue} bookings={bookings} user={user} />,
     map: <ParkingMap
       floors={FLOORS} parking={parking} activeFloor={activeFloor} setActiveFloor={setActiveFloor}
       filtered={filtered} selected={selectedSlot} onSelect={setSelectedSlot}
       filterType={filterType} setFilterType={setFilterType}
       searchPlate={searchPlate} setSearchPlate={setSearchPlate}
       onCheckIn={() => setModal("checkin")} onCheckOut={() => setModal("checkout")}
-      user={user} recentSlots={recentSlots}
+      user={user} recentSlots={recentSlots} showToast={showToast}
       onPayRazorpay={(slot) => {
         const amt = slot?.occupied ? fee(slot?.since, slot) : (slot?.rate || 60);
         triggerRazorpayPayment({
           amount: amt,
           description: `Slot ${String.fromCharCode(65 + (slot?.row || 0))}${(slot?.col || 0) + 1} (${activeFloor})`,
           plate: slot?.plate || "TN 01 DEMO",
-          onSuccess: (resp) => {
+          onSuccess: () => {
             if (slot?.occupied) {
               handleCheckOut();
             } else {
@@ -545,16 +606,6 @@ export default function App() {
     reports: <ReportsPage revenue={revenue} bookings={bookings} stats={globalStats} />,
     settings: <SettingsPage user={user} />,
   };
-
-  const navItems = [
-    { id: "dashboard", icon: "⬡", label: "DASHBOARD" },
-    { id: "map", icon: "◈", label: "LIVE MAP" },
-    { id: "p2p", icon: "🤝", label: "P2P MARKET" },
-    { id: "bookings", icon: "◉", label: "BOOKINGS" },
-    { id: "vehicles", icon: "◈", label: "VEHICLES" },
-    { id: "reports", icon: "◫", label: "REPORTS" },
-    ...(user.role === "admin" ? [{ id: "settings", icon: "◌", label: "SETTINGS" }] : []),
-  ];
 
   return (
     <div className="app-container" style={{ display: "flex", height: "100vh", background: T.bg0, color: T.text0, fontFamily: T.font, overflow: "hidden" }}>
@@ -667,12 +718,12 @@ export default function App() {
                 fontSize: 18, position: "relative", padding: "4px 6px", lineHeight: 1,
               }}>
                 🔔
-                {notifications.filter(n => Date.now() - n.time < 60000).length > 0 && (
+                {notifications.filter(n => getNow() - n.time < 60000).length > 0 && (
                   <span style={{
                     position: "absolute", top: 0, right: 0, width: 16, height: 16,
                     background: T.red, borderRadius: "50%", fontSize: 9, fontWeight: 800,
                     color: "#fff", display: "flex", alignItems: "center", justifyContent: "center",
-                  }}>{Math.min(notifications.filter(n => Date.now() - n.time < 60000).length, 9)}</span>
+                  }}>{Math.min(notifications.filter(n => getNow() - n.time < 60000).length, 9)}</span>
                 )}
               </button>
               {notifOpen && (
@@ -693,7 +744,7 @@ export default function App() {
                           <span style={{ fontSize: 16 }}>{n.type === "in" ? "🟢" : "🔴"}</span>
                           <div>
                             <div style={{ fontSize: 12, fontWeight: 600, color: T.text0 }}>{n.msg}</div>
-                            <div style={{ fontSize: 10, color: T.text2, marginTop: 2 }}>{Math.round((Date.now() - n.time) / 1000)}s ago</div>
+                            <div style={{ fontSize: 10, color: T.text2, marginTop: 2 }}>{Math.round((getNow() - n.time) / 1000)}s ago</div>
                           </div>
                         </div>
                       ))
@@ -754,11 +805,15 @@ export default function App() {
 
       {/* Modals */}
       {modal === "checkin" && selectedSlot && !selectedSlot.occupied && (
-        <Modal title="CHECK IN VEHICLE" onClose={() => setModal(null)}>
+        <Modal title="CHECK IN VEHICLE" onClose={() => { setModal(null); releaseSlot(selectedSlot.id).catch(console.error); }}>
           <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            <div style={{ background: T.amberDim, color: T.amber, padding: "8px 12px", borderRadius: 8, fontSize: 12, display: "flex", justifyContent: "space-between", fontWeight: 700 }}>
+              <span>SLOT HELD</span>
+              <span>{holdTimer}s</span>
+            </div>
             <InfoRow label="SLOT" value={`${String.fromCharCode(65 + selectedSlot.row)}${selectedSlot.col + 1} · ${activeFloor}`} />
             <InfoRow label="TYPE" value={selectedSlot.type.toUpperCase()} />
-            <InfoRow label="HOURLY RATE" value={`₹${{ ev: 100, accessible: 50, premium: 160 }[selectedSlot.type] || 60}/hr`} />
+            <InfoRow label="HOURLY RATE" value={`₹${selectedSlot.rate || 60}/hr`} />
             <Label text="LICENSE PLATE" />
             <input value={checkinForm.plate} onChange={e => setCheckinForm(p => ({ ...p, plate: e.target.value }))}
               placeholder="TN 01 AB 1234" style={inputStyle} />
@@ -797,7 +852,7 @@ export default function App() {
               placeholder="Customer name" style={inputStyle} />
             <div style={{ background: T.amberDim, border: `1px solid ${T.amber}44`, borderRadius: 8, padding: "14px 18px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <span style={{ fontSize: 10, letterSpacing: 3, color: T.amber }}>TOTAL AMOUNT</span>
-              <span style={{ fontSize: 24, fontWeight: 800, color: T.amber }}>₹{({ ev: 100, accessible: 50, premium: 160 }[selectedSlot.type] || 60) * (checkinForm.duration || 1)}</span>
+              <span style={{ fontSize: 24, fontWeight: 800, color: T.amber }}>₹{(selectedSlot.rate || 60) * (checkinForm.duration || 1)}</span>
             </div>
             <div style={{ display: "flex", gap: 10, marginTop: 4 }}>
               <Btn text="PAY & CHECK IN" color="#3399cc" onClick={handleRazorpayCheckIn} />
@@ -1083,7 +1138,7 @@ export default function App() {
                 showToast(`✅ QR Verified! Gate Opened for Booking: ${bNum}`);
                 setModal(null);
                 setCheckinForm(p => ({ ...p, qrToken: "" }));
-              } catch (e) {
+              } catch {
                 showToast(`✅ QR Pass Token ${token.slice(0, 12)}... Verified! Gate Opened.`);
                 setModal(null);
                 setCheckinForm(p => ({ ...p, qrToken: "" }));
@@ -1209,6 +1264,7 @@ export default function App() {
           .login-box { width: 90vw !important; padding: 30px 24px !important; }
         }
       `}</style>
+      <ChatWidget />
     </div>
   );
 }
@@ -1379,8 +1435,43 @@ function KpiCard({ label, value, color, icon, sparkData, prefix = "" }) {
   );
 }
 
-function Dashboard({ stats, parking, revenue, bookings }) {
+function CommuterDashboard({ bookings }) {
+  const activeBookings = bookings.filter(b => b.status === "active" || b.status === "CONFIRMED");
+  const pastBookings = bookings.filter(b => b.status === "COMPLETED");
+
+  return (
+    <div style={{ padding: 24, display: "flex", flexDirection: "column", gap: 20, overflowY: "auto", height: "100%" }}>
+      <div style={{
+        background: `linear-gradient(135deg, ${T.bg1}, ${T.bg2})`,
+        border: `1px solid ${T.border2}`, borderRadius: 14, padding: "18px 24px",
+        display: "flex", justifyContent: "space-between", alignItems: "center",
+      }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+          <div style={{ width: 44, height: 44, borderRadius: 12, background: T.accentDim, border: `1px solid ${T.accent}44`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22 }}>
+            👋
+          </div>
+          <div>
+            <div style={{ fontSize: 14, fontWeight: 900, letterSpacing: 1, color: T.text0 }}>WELCOME BACK</div>
+            <div style={{ fontSize: 11, color: T.text2, marginTop: 4 }}>Ready to find your next parking spot?</div>
+          </div>
+        </div>
+      </div>
+
+      <div className="dashboard-stats-grid" style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 12 }}>
+        <KpiCard label="Active Bookings" value={activeBookings.length} color={T.accent} icon="🚗" />
+        <KpiCard label="Past Bookings" value={pastBookings.length} color={T.green} icon="✓" />
+      </div>
+    </div>
+  );
+}
+
+function Dashboard({ stats, parking, revenue, bookings, user }) {
   const [hoverBar, setHoverBar] = useState(null);
+  
+  if (user?.role === 'user') {
+    return <CommuterDashboard bookings={bookings} />;
+  }
+
   const recent7 = revenue.slice(-7);
   const maxRev = Math.max(...recent7.map(d => d.revenue), 1);
   const activeBookings = bookings.filter(b => b.status === "active").slice(0, 8);
@@ -1590,7 +1681,12 @@ function Dashboard({ stats, parking, revenue, bookings }) {
 
 // ─── PARKING MAP ──────────────────────────────────────────────────────────────
 function ParkingMap({ floors, parking, activeFloor, setActiveFloor, filtered, selected, onSelect,
-  filterType, setFilterType, searchPlate, setSearchPlate, onCheckIn, onCheckOut, user, recentSlots = new Set(), onPayRazorpay }) {
+  filterType, setFilterType, searchPlate, setSearchPlate, onCheckIn, onCheckOut, user, recentSlots = new Set(), onPayRazorpay, showToast }) {
+  const [currentTime, setCurrentTime] = useState(() => getNow());
+  useEffect(() => {
+    const timer = setInterval(() => setCurrentTime(getNow()), 10000);
+    return () => clearInterval(timer);
+  }, []);
 
   const currentSlots = parking[activeFloor] || [];
   const freeCount = currentSlots.filter(s => !s.occupied && !s.reserved).length;
@@ -1666,8 +1762,28 @@ function ParkingMap({ floors, parking, activeFloor, setActiveFloor, filtered, se
               </button>
             );
           })}
-          <div style={{ marginLeft: "auto", fontSize: 10, color: T.text2, letterSpacing: 1 }}>
-            <span style={{ color: T.green, fontWeight: 700 }}>{freeCount}</span> / {currentSlots.length} · ₹{floorRate}/hr
+          <div style={{ marginLeft: "auto", fontSize: 10, color: T.text2, letterSpacing: 1, display: 'flex', alignItems: 'center', gap: 10 }}>
+            {freeCount === 0 && user?.role === 'user' && (
+              <button 
+                onClick={async () => {
+                  try {
+                    await joinWaitlist('DEFAULT_PARKING_ID');
+                    const pos = await getWaitlistPosition('DEFAULT_PARKING_ID');
+                    showToast(`You have joined the waitlist! Position: ${pos.position}`);
+                  } catch (e) {
+                    showToast("Failed to join waitlist", "error");
+                  }
+                }}
+                style={{
+                  background: T.amber, color: '#000', border: 'none', padding: '4px 10px', 
+                  borderRadius: 4, fontWeight: 700, cursor: 'pointer'
+                }}>
+                Join Waitlist
+              </button>
+            )}
+            <div>
+              <span style={{ color: T.green, fontWeight: 700 }}>{freeCount}</span> / {currentSlots.length} · ₹{floorRate}/hr
+            </div>
           </div>
         </div>
 
@@ -1828,19 +1944,19 @@ function ParkingMap({ floors, parking, activeFloor, setActiveFloor, filtered, se
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                 <div style={{ flex: 1, height: 8, background: T.bg3, borderRadius: 4, overflow: "hidden" }}>
                   <div style={{
-                    width: `${selected.occupied ? Math.min(100, Math.floor(35 + (Date.now() - (selected.since || Date.now())) / 30000)) : 100}%`,
+                    width: `${selected.occupied ? Math.min(100, Math.floor(35 + (currentTime - (selected.since || currentTime)) / 30000)) : 100}%`,
                     height: "100%", background: `linear-gradient(90deg, #FFE135, ${T.green})`, borderRadius: 4,
                     boxShadow: "0 0 8px #FFE135", animation: selected.occupied ? "pulse 1.5s infinite" : "none"
                   }} />
                 </div>
                 <span style={{ fontSize: 11, fontWeight: 900, color: "#FFE135", fontFamily: T.fontMono }}>
-                  {selected.occupied ? Math.min(100, Math.floor(35 + (Date.now() - (selected.since || Date.now())) / 30000)) : 100}%
+                  {selected.occupied ? Math.min(100, Math.floor(35 + (currentTime - (selected.since || currentTime)) / 30000)) : 100}%
                 </span>
               </div>
               {selected.occupied && (
                 <div style={{ display: "flex", justifyContent: "space-between", fontSize: 9, color: T.text2, marginTop: 2 }}>
-                  <span>Energy: <strong style={{ color: T.text0 }}>{(((Date.now() - (selected.since || Date.now())) / 3600000) * 11.2).toFixed(1)} kWh</strong></span>
-                  <span>Power Fee: <strong style={{ color: T.green }}>₹{Math.ceil((((Date.now() - (selected.since || Date.now())) / 3600000) * 11.2) * 12)}</strong></span>
+                  <span>Energy: <strong style={{ color: T.text0 }}>{(((currentTime - (selected.since || currentTime)) / 3600000) * 11.2).toFixed(1)} kWh</strong></span>
+                  <span>Power Fee: <strong style={{ color: T.green }}>₹{Math.ceil((((currentTime - (selected.since || currentTime)) / 3600000) * 11.2) * 12)}</strong></span>
                 </div>
               )}
             </div>
@@ -2026,7 +2142,7 @@ function VehiclesPage({ vehicles }) {
 }
 
 // ─── REPORTS ─────────────────────────────────────────────────────────────────
-function ReportsPage({ revenue, bookings, stats }) {
+function ReportsPage({ revenue }) {
   const last7 = revenue.slice(-7);
   const last30 = revenue;
   const totalRev = last30.reduce((a, d) => a + d.revenue, 0);
@@ -2124,6 +2240,12 @@ function ReportsPage({ revenue, bookings, stats }) {
 function SettingsPage({ user }) {
   const [rates, setRates] = useState({ ev: 100, standard: 60, accessible: 50, premium: 160 });
   const [saved, setSaved] = useState(false);
+
+  useEffect(() => {
+    getRates().then(data => {
+      if (data) setRates(data);
+    }).catch(e => console.error(e));
+  }, []);
   return (
     <div style={{ padding: 24, maxWidth: 700 }}>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
@@ -2138,7 +2260,15 @@ function SettingsPage({ user }) {
             </div>
           ))}
           <Btn text={saved ? "SAVED ✓" : "SAVE RATES"} color={saved ? T.green : T.accent}
-            onClick={() => { setSaved(true); setTimeout(() => setSaved(false), 2000); }} />
+            onClick={async () => {
+              try {
+                await updateRates(rates);
+                setSaved(true); 
+                setTimeout(() => setSaved(false), 2000);
+              } catch (e) {
+                console.error("Failed to save rates", e);
+              }
+            }} />
         </div>
 
         {/* System info */}

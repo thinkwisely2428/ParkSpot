@@ -102,7 +102,7 @@ export function subscribeToSlots(callback) {
   socket.emit('join_parking', 'DEFAULT_PARKING_ID');
   
   // Listen for socket updates
-  socket.on('slot_updated', (updatedSlot) => {
+  socket.on('slot_updated', () => {
     // You would typically refetch or update state here.
     // For simplicity, we just refetch all slots when one updates.
     fetchSlots(callback);
@@ -160,6 +160,57 @@ export async function updateSlot(slotId, data) {
   } else {
     await fetchAPI(`/slots/${slotId}/release`, { method: 'POST' });
   }
+}
+
+export async function getRates() {
+  const res = await fetchAPI('/slots/rates');
+  return res.rates;
+}
+
+export async function holdSlot(slotId, parkingId) {
+  return await fetchAPI(`/slots/${slotId}/hold`, {
+    method: 'POST',
+    body: JSON.stringify({ parkingId })
+  });
+}
+
+export async function releaseSlot(slotId) {
+  return await fetchAPI(`/slots/${slotId}/release`, {
+    method: 'POST'
+  });
+}
+
+export async function joinWaitlist(parkingId) {
+  return await fetchAPI(`/waitlist`, {
+    method: 'POST',
+    body: JSON.stringify({ parkingId })
+  });
+}
+
+export async function getWaitlistPosition(parkingId) {
+  return await fetchAPI(`/waitlist/${parkingId}/position`, {
+    method: 'GET'
+  });
+}
+
+export async function leaveWaitlist(parkingId) {
+  return await fetchAPI(`/waitlist/${parkingId}`, {
+    method: 'DELETE'
+  });
+}
+
+export async function updateRates(rates) {
+  await fetchAPI('/slots/rates', {
+    method: 'PUT',
+    body: JSON.stringify({ rates })
+  });
+}
+
+export async function sendChatMessage(message, conversationId) {
+  return await fetchAPI('/chat/message', {
+    method: 'POST',
+    body: JSON.stringify({ message, conversationId })
+  });
 }
 
 export async function createBooking(bookingData) {
@@ -344,6 +395,7 @@ export async function getP2PListings() {
     const res = await fetchAPI('/p2p');
     return res.data || [];
   } catch (e) {
+    console.error("Error fetching p2p:", e);
     return [];
   }
 }

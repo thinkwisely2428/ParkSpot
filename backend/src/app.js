@@ -54,6 +54,7 @@ app.use('/api/v1/slots', require('./routes/slot.routes'));
 app.use('/api/v1/waitlist', require('./routes/waitlist.routes'));
 app.use('/api/v1/p2p', require('./routes/p2p.routes'));
 app.use('/api/v1/payments', require('./routes/payment.routes'));
+app.use('/api/v1/chat', require('./routes/chat.routes'));
 
 // Global Error Handler
 app.use((err, req, res, next) => {
