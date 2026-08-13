@@ -1,7 +1,7 @@
 import { io } from 'socket.io-client';
 
 const envUrl = import.meta.env.VITE_BACKEND_URL;
-const BACKEND_URL = envUrl !== undefined ? envUrl : 'http://localhost:5000';
+const BACKEND_URL = envUrl !== undefined ? envUrl : '';
 const socket = io(BACKEND_URL || undefined);
 
 let currentUser = null;
